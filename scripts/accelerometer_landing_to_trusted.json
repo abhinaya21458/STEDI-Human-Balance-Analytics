@@ -1,0 +1,49 @@
+{
+	"jobConfig": {
+		"name": "accelerometer_landing_to_trusted",
+		"description": "",
+		"role": "arn:aws:iam::876947611158:role/Glue-role-e0157f84",
+		"command": "glueetl",
+		"version": "5.1",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 2,
+		"maxCapacity": 2,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 10,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "accelerometer_landing_to_trusted.py",
+		"scriptLocation": "s3://aws-glue-assets-876947611158-us-east-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--conf",
+				"value": "spark.eventLog.rolling.enabled=true --conf spark.sql.catalog.glue_catalog.glue.skip-name-validation=true",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2026-07-07T07:35:05.210Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-876947611158-us-east-1/temporary/",
+		"logging": true,
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-876947611158-us-east-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nfrom awsglue.transforms import *\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom pyspark.context import SparkContext\r\nfrom awsglue.context import GlueContext\r\nfrom awsglue.job import Job\r\nfrom awsglue.dynamicframe import DynamicFrame\r\n\r\nargs = getResolvedOptions(sys.argv, [\"JOB_NAME\"])\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\njob = Job(glueContext)\r\njob.init(args[\"JOB_NAME\"], args)\r\n\r\nAccelerometerLanding = glueContext.create_dynamic_frame.from_options(\r\n    format_options={\"multiline\": False},\r\n    connection_type=\"s3\",\r\n    format=\"json\",\r\n    connection_options={\"paths\": [\"s3://udacity-stedi-abhi/accelerometer/landing/\"], \"recurse\": True},\r\n    transformation_ctx=\"AccelerometerLanding\",\r\n)\r\n\r\nCustomerTrusted = glueContext.create_dynamic_frame.from_options(\r\n    format_options={\"multiline\": False},\r\n    connection_type=\"s3\",\r\n    format=\"json\",\r\n    connection_options={\"paths\": [\"s3://udacity-stedi-abhi/customer/trusted/\"], \"recurse\": True},\r\n    transformation_ctx=\"CustomerTrusted\",\r\n)\r\n\r\nJoin_node = Join.apply(\r\n    frame1=AccelerometerLanding,\r\n    frame2=CustomerTrusted,\r\n    keys1=[\"user\"],\r\n    keys2=[\"email\"],\r\n    transformation_ctx=\"Join_node\",\r\n)\r\n\r\ndf = Join_node.toDF()\r\ndf_filtered = df.select(\"user\", \"timestamp\", \"x\", \"y\", \"z\")\r\nCleaned_DynamicFrame = DynamicFrame.fromDF(df_filtered, glueContext, \"Cleaned_DynamicFrame\")\r\n\r\nAccelerometerTrusted_Sink = glueContext.getSink(\r\n    path=\"s3://udacity-stedi-abhi/accelerometer/trusted/\",\r\n    connection_type=\"s3\",\r\n    updateBehavior=\"UPDATE_IN_DATABASE\",\r\n    partitionKeys=[],\r\n    enableUpdateCatalog=True,\r\n    transformation_ctx=\"AccelerometerTrusted_Sink\"\r\n)\r\nAccelerometerTrusted_Sink.setCatalogInfo(\r\n    catalogDatabase=\"stedi-project\", \r\n    catalogTableName=\"accelerometer_trusted\"\r\n)\r\nAccelerometerTrusted_Sink.setFormat(\"json\")\r\nAccelerometerTrusted_Sink.writeFrame(Cleaned_DynamicFrame)\r\njob.commit()\r\n"
+}
